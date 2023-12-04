@@ -1,0 +1,12 @@
+{
+    "refresh_token": "",
+    "file_parsing_prompts": "",
+    "keyword": "kimi",
+    "reset_keyword": "kimi重置会话",
+    "kimi_reply_tips": "[kimi]",
+    "file_upload": true,
+    "group_context": true,
+    "azure_api_url": "",
+    "azure_api_key": "",
+    "recognize_pictures_keyword": "kimi识图"
+}
