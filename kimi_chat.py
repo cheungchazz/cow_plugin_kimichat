@@ -53,7 +53,7 @@ class KimiChat(Plugin):
                 refresh_access_token()
 
             self.params_cache = ExpiredDict(300)  # 创建过期字典，内容3分钟后失效
-            self.keyword = conf.get("keyword", "kimi ")
+            self.keyword = conf.get("keyword", "")
             self.recognize_pictures_keyword = conf.get("recognize_pictures_keyword", "kimi识图")
             self.reset_keyword = conf.get("reset_keyword", "kimi重置会话")
             self.file_upload = conf.get("file_upload", False)
