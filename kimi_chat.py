@@ -133,10 +133,10 @@ class KimiChat(Plugin):
 
         handler_map = {
             (ContextType.SHARING, False): lambda: self._handle_sharing_context(user_id, content),
-            (ContextType.TEXT, False): lambda: self._handle_text_context(user_id, content),
+            (ContextType.TEXT, False): lambda: self._handle_text_context(user_id, content, user_id),
             (ContextType.FILE, False): lambda: self._handle_file_context(user_id, content, msg),
             (ContextType.SHARING, True): lambda: self._handle_sharing_context(target_id, content),
-            (ContextType.TEXT, True): lambda: self._handle_text_context(target_id, content),
+            (ContextType.TEXT, True): lambda: self._handle_text_context(target_id, content, user_id),
             (ContextType.FILE, True): lambda: self._handle_file_context(target_id, content, msg),
             (ContextType.IMAGE, False): lambda: self._handle_image_context(user_id, content, msg),
             (ContextType.IMAGE, True): lambda: self._handle_image_context(user_id, content, msg)
@@ -167,7 +167,7 @@ class KimiChat(Plugin):
         else:
             return rely_content
 
-    def _handle_text_context(self, user_id, content):
+    def _handle_text_context(self, session, content, user_id):
         """
         处理文本对话的情况。
 
@@ -184,7 +184,7 @@ class KimiChat(Plugin):
             # 去除关键词和紧随其后的空格
             new_content = content[len(keyword_prefix):]
             # 使用新内容处理文本聊天
-            return self._process_text_chat(user_id, new_content)
+            return self._process_text_chat(session, new_content)
         elif content == self.recognize_pictures_keyword:
             self.params_cache[user_id] = {'prompt': ''}  # 触发了识图功能，创建过期字典保存user_id
             return f"请3分钟内发送图片内容整理要求给我,我将按您的要求进行整理，要求请以【{recognize_pictures_prompt_prefix}" \
@@ -197,10 +197,10 @@ class KimiChat(Plugin):
                 return "已收到识图要求，现在请发送图片。"
         elif self.reset_keyword in content:
             # 如果内容包含重置关键字，重置聊天数据
-            return self._reset_chat_data(user_id)
+            return self._reset_chat_data(session)
         elif self.keyword == "":
             # 如果没有设定关键词，正常处理文本聊天
-            return self._process_text_chat(user_id, content)
+            return self._process_text_chat(session, content)
 
         # 如果内容不符合任何条件，返回None
         return None
