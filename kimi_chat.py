@@ -70,6 +70,8 @@ class KimiChat(Plugin):
             self.openai_api_url = conf.get("openai_api_url")
             self.openai_api_key = conf.get("openai_api_key")
             self.frames_to_extract = None
+            self.current_context = None
+            self.send_msg = create_channel_object()
             if "frames_to_extract" in conf:
                 self.frames_to_extract = int(conf["frames_to_extract"])
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
@@ -89,6 +91,7 @@ class KimiChat(Plugin):
         if context_type in [ContextType.VOICE, ContextType.IMAGE_CREATE, ContextType.JOIN_GROUP, ContextType.PATPAT]:
             return
 
+        self.current_context = e_context
         msg: ChatMessage = e_context["context"]["msg"]
         content = e_context["context"].content.strip()
 
@@ -151,7 +154,7 @@ class KimiChat(Plugin):
             (ContextType.IMAGE, False): lambda: self._handle_image_context(user_id, content, msg),
             (ContextType.IMAGE, True): lambda: self._handle_image_context(user_id, content, msg),
             (ContextType.VIDEO, False): lambda: self._handle_video_context(user_id, content, msg),
-            (ContextType.VIDEO, True): lambda: self._handle_video_context(user_id, content, msg)
+            (ContextType.VIDEO, True): lambda: self._handle_video_context(target_id, content, msg)
         }
 
         handler = handler_map.get((context_type, isgroup))
@@ -234,6 +237,7 @@ class KimiChat(Plugin):
             logger.info(f"[KimiChat] 未开启文件识别或文件格式不支持，PASS！")
             return None
         msg.prepare()
+        self._send_msg(f"{self.kimi_reply_tips}\n☑正在给您解析文件并总结\n⏳整理内容需要点时间，请您耐心等待...")
         uploader = FileUploader()
         filename = os.path.basename(content)
         file_id = uploader.upload(filename, content)
@@ -305,7 +309,7 @@ class KimiChat(Plugin):
             msg.prepare()
             # 提取prompt的值
             prompt = self.params_cache[user_id].get('prompt', '')
-
+            self._send_msg(f"{self.kimi_reply_tips}\n☑正在识别图片内容\n⏳整理内容需要点时间，请您耐心等待...")
             # 判断prompt是否有内容
             if prompt:
                 logger.info(f"[KimiChat] 使用用户提供的prompt！")
@@ -328,7 +332,7 @@ class KimiChat(Plugin):
             logger.info(f"[KimiChat] 开始处理视频解读！")
             msg.prepare()
             key_frame_paths = extract_and_save_key_frames(content, self.frames_to_extract)
-
+            self._send_msg(f"{self.kimi_reply_tips}\n☑正在识别视频内容\n⏳整理内容需要点时间，请您耐心等待...")
             # 存储所有分析结果的列表
             analyzed_results = []
 
@@ -352,6 +356,19 @@ class KimiChat(Plugin):
             logger.info(f"[KimiChat] 没有开启视频解析功能，PASS！")
             return None
 
+    def _send_msg(self, send_content):
+        # 使用 self.current_context 中存储的 e_context
+        reply = Reply()
+        reply.type = ReplyType.TEXT
+        context = self.current_context['context']
+        msg = context.kwargs.get('msg')
+        if context.kwargs.get('isgroup'):
+            nickname = msg.actual_user_nickname  # 获取昵称
+            reply.content = f"@{nickname}\n" + send_content
+        else:
+            reply.content = send_content
+        self.send_msg.send(reply, context)
+
 
 def check_file_format(file_path):
     _, file_extension = os.path.splitext(file_path)
@@ -362,3 +379,21 @@ def check_file_format(file_path):
         return True
     else:
         return False
+
+
+def create_channel_object():
+    # 从配置中获取频道类型
+    channel_type = conf().get("channel_type")
+    # 根据频道类型创建相应的频道对象
+    if channel_type == 'wework':
+        from channel.wework.wework_channel import WeworkChannel
+        return WeworkChannel()
+    elif channel_type == 'ntchat':
+        from channel.wechatnt.ntchat_channel import NtchatChannel
+        return NtchatChannel()
+    elif channel_type == 'weworktop':
+        from channel.weworktop.weworktop_channel import WeworkTopChannel
+        return WeworkTopChannel()
+    else:
+        from channel.wechat.wechat_channel import WechatChannel
+        return WechatChannel()
