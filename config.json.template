@@ -1,6 +1,6 @@
 {
     "refresh_token": "",
-    "file_parsing_prompts": "",
+    "file_parsing_prompts": "请帮我整理汇总文件的核心内容",
     "keyword": "kimi",
     "reset_keyword": "kimi重置会话",
     "kimi_reply_tips": "[kimi]",
@@ -8,5 +8,10 @@
     "group_context": true,
     "azure_api_url": "",
     "azure_api_key": "",
-    "recognize_pictures_keyword": "kimi识图"
+    "recognize_pictures_keyword": "kimi识图",
+    "card_analysis": true,
+    "video_analysis": true,
+    "openai_api_url": "",
+    "openai_api_key": "",
+    "frames_to_extract": 10
 }

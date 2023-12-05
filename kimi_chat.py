@@ -18,7 +18,10 @@ from plugins.cow_plugin_kimichat.module.azure_image_recognition.azure_image_reco
 from plugins.cow_plugin_kimichat.module.kimi_api.kimi_token_manager import tokens, refresh_access_token
 from plugins.cow_plugin_kimichat.module.kimi_api.kimi_api_models import create_new_chat_session, stream_chat_responses
 from plugins.cow_plugin_kimichat.module.kimi_api.kimi_file_uploader import FileUploader
-from plugins.cow_plugin_kimichat.prompts.image_recognition import character_prompt, image_recognition_prompt
+from plugins.cow_plugin_kimichat.module.video_frame_manager.video_frame_manager import extract_and_save_key_frames
+from plugins.cow_plugin_kimichat.module.video_to_text_transcriber.video_to_text_transcriber import transcribe_audio
+from plugins.cow_plugin_kimichat.prompts.image_recognition import image_recognition_prompt, image_character_prompt
+from plugins.cow_plugin_kimichat.prompts.video_recognition import video_character_prompt, video_recognition_prompt
 
 
 @plugins.register(
@@ -43,10 +46,10 @@ class KimiChat(Plugin):
             # 确保必需的配置项存在
             if not conf.get("refresh_token"):
                 raise ValueError("配置文件中缺少 'refresh_token'")
-            if not conf.get("azure_api_url"):
-                raise ValueError("配置文件中缺少 'azure_api_url'")
             if not conf.get("azure_api_key"):
                 raise ValueError("配置文件中缺少 'azure_api_key'")
+            if not conf.get("openai_api_key"):
+                raise ValueError("配置文件中缺少 'openai_api_key'")
 
             tokens['refresh_token'] = conf.get("refresh_token")
             if not tokens['access_token']:  # 初始化全局access_token
@@ -58,10 +61,17 @@ class KimiChat(Plugin):
             self.reset_keyword = conf.get("reset_keyword", "kimi重置会话")
             self.file_upload = conf.get("file_upload", False)
             self.group_context = conf.get("group_context", False)
+            self.card_analysis = conf.get("card_analysis", False)
+            self.video_analysis = conf.get("video_analysis", False)
             self.file_parsing_prompts = conf.get("file_parsing_prompts", "请帮我整理汇总文件的核心内容")
             self.azure_api_url = conf.get("azure_api_url")
             self.azure_api_key = conf.get("azure_api_key")
             self.kimi_reply_tips = conf.get("kimi_reply_tips", "")
+            self.openai_api_url = conf.get("openai_api_url")
+            self.openai_api_key = conf.get("openai_api_key")
+            self.frames_to_extract = None
+            if "frames_to_extract" in conf:
+                self.frames_to_extract = int(conf["frames_to_extract"])
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
             logger.info("[KimiChat] 初始化完成.")
         except FileNotFoundError:
@@ -76,7 +86,7 @@ class KimiChat(Plugin):
 
     def on_handle_context(self, e_context: EventContext):
         context_type = e_context["context"].type
-        if context_type not in [ContextType.TEXT, ContextType.FILE, ContextType.SHARING, ContextType.IMAGE]:
+        if context_type in [ContextType.VOICE, ContextType.IMAGE_CREATE, ContextType.JOIN_GROUP, ContextType.PATPAT]:
             return
 
         msg: ChatMessage = e_context["context"]["msg"]
@@ -139,7 +149,9 @@ class KimiChat(Plugin):
             (ContextType.TEXT, True): lambda: self._handle_text_context(target_id, content, user_id),
             (ContextType.FILE, True): lambda: self._handle_file_context(target_id, content, msg),
             (ContextType.IMAGE, False): lambda: self._handle_image_context(user_id, content, msg),
-            (ContextType.IMAGE, True): lambda: self._handle_image_context(user_id, content, msg)
+            (ContextType.IMAGE, True): lambda: self._handle_image_context(user_id, content, msg),
+            (ContextType.VIDEO, False): lambda: self._handle_video_context(user_id, content, msg),
+            (ContextType.VIDEO, True): lambda: self._handle_video_context(user_id, content, msg)
         }
 
         handler = handler_map.get((context_type, isgroup))
@@ -157,15 +169,19 @@ class KimiChat(Plugin):
         :param content: 用户提供的内容。
         :return: 处理后的回复内容。
         """
-        logger.info(f"[KimiChat] 开始处理分享链接！")
-        new_content = f"总结网站内容：{content}"
-        chat_id = self._get_or_create_chat_id(user_id, True)
-        rely_content = stream_chat_responses(chat_id, new_content, new_chat=True)
-        self.chat_data[user_id] = {'chatid': chat_id, 'use_search': True}
-        if not rely_content:
-            return "无响应"
+        if not self.card_analysis:
+            logger.info(f"[KimiChat] 开始处理分享链接！")
+            new_content = f"总结网站内容：{content}"
+            chat_id = self._get_or_create_chat_id(user_id, True)
+            rely_content = stream_chat_responses(chat_id, new_content, new_chat=True)
+            self.chat_data[user_id] = {'chatid': chat_id, 'use_search': True}
+            if not rely_content:
+                return "无响应"
+            else:
+                return rely_content
         else:
-            return rely_content
+            logger.info(f"[KimiChat] 没有开启分享链接解析功能，PASS！")
+            return None
 
     def _handle_text_context(self, session, content, user_id):
         """
@@ -285,24 +301,56 @@ class KimiChat(Plugin):
         """
         # 检查用户ID是否存在于params_cache中
         if user_id in self.params_cache:
+            logger.info(f"[KimiChat] 开始处理图片解析！")
             msg.prepare()
             # 提取prompt的值
             prompt = self.params_cache[user_id].get('prompt', '')
 
             # 判断prompt是否有内容
             if prompt:
+                logger.info(f"[KimiChat] 使用用户提供的prompt！")
                 image_information = analyze_image(content, self.azure_api_url, self.azure_api_key)
-                prompts = character_prompt + prompt + f"\n图片内容如下：\n{image_information}"
+                prompts = image_character_prompt + prompt + f"\n图片内容如下：\n{image_information}"
                 del self.params_cache[user_id]
                 return self._process_text_chat(user_id, prompts)
             else:
+                logger.info(f"[KimiChat] 使用默认的prompt！")
                 image_information = analyze_image(content, self.azure_api_url, self.azure_api_key)
-                prompts = character_prompt + image_recognition_prompt + f"\n图片内容如下：\n{image_information}"
+                prompts = image_character_prompt + image_recognition_prompt + f"\n图片内容如下：\n{image_information}"
                 del self.params_cache[user_id]
                 return self._process_text_chat(user_id, prompts)
 
         # 如果用户ID不在params_cache中，或者没有特定的处理逻辑，返回None或相应提示
         return "队列无事件"
+
+    def _handle_video_context(self, user_id, content, msg):
+        if self.video_analysis:
+            logger.info(f"[KimiChat] 开始处理视频解读！")
+            msg.prepare()
+            key_frame_paths = extract_and_save_key_frames(content, self.frames_to_extract)
+
+            # 存储所有分析结果的列表
+            analyzed_results = []
+
+            # 遍历关键帧路径，并对每个关键帧进行分析
+            for frame_path in key_frame_paths:
+                analysis_result = analyze_image(frame_path, self.azure_api_url, self.azure_api_key)
+                analyzed_results.append(analysis_result)
+
+            if analyzed_results:
+                logger.debug(f"[KimiChat] 成功获取关键帧识别结果！")
+                text = transcribe_audio(content, self.openai_api_url, self.openai_api_key)
+                prompts = video_character_prompt + video_recognition_prompt + f"\n以下是按顺序抽取的视频帧的描述:" \
+                                                                              f"\n{analyzed_results}\n" \
+                                                                              f"\n以下是视频文件的音频转文本内容：\n{text}"
+                return self._process_text_chat(user_id, prompts)
+            else:
+                logger.warn(f"[KimiChat] 未能获取关键帧识别结果，检查日志！")
+                return "非常抱歉，解读视频出了点问题，您可以再试试，还是不行请通知我的主人修一修。"
+
+        else:
+            logger.info(f"[KimiChat] 没有开启视频解析功能，PASS！")
+            return None
 
 
 def check_file_format(file_path):

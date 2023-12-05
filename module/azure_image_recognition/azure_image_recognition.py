@@ -13,6 +13,7 @@ from common.log import logger
 
 
 def analyze_image(file_path, api_url, api_key):
+    url = api_url + "computervision/imageanalysis:analyze"
     """
     使用Azure计算机视觉API分析图像并提取标题、密集标题、标签和文本。
     """
@@ -26,7 +27,7 @@ def analyze_image(file_path, api_url, api_key):
     }
     try:
         with open(file_path, 'rb') as img_file:
-            response = requests.post(api_url, headers=headers, params=params, data=img_file)
+            response = requests.post(url, headers=headers, params=params, data=img_file)
         response.raise_for_status()
 
         analysis_result = response.json()
@@ -49,7 +50,3 @@ def analyze_image(file_path, api_url, api_key):
     except IOError as e:
         logger.error(f"文件操作出错: {e}")
         return None
-
-
-
-

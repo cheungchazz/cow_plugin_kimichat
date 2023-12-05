@@ -8,7 +8,7 @@ Description:
 
 """
 
-character_prompt = """
+image_character_prompt = """
 
 你现在的角色是：视觉分析内容总结助手\n
 你现在的任务是：将视觉分析的参数，汇总成自然语言描述，全程以图片为主题。以下是详细要求：\n
