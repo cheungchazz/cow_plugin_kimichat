@@ -70,7 +70,7 @@ pip install opencv-python pydub opencc-python-reimplemented
     "reset_keyword": "kimi重置会话" # 相当于网页开个新的窗口对话，没有写会话过期逻辑，懒
      "kimi_reply_tips": "[kimi]" # 插件回复内容前置提示词，方便区分
     "file_upload": true   # 文件解析开关，群聊私聊通通都是他，开就全开，关就全关
-    "group_context": true # 群聊会话上下文管理，为true整个群用一个会话
+    "group_context": true # 群聊会话上下文管理，为true整个群用一个会话，包括文件、视频解析
     "azure_api_url": ""  # 识图api链接
     "azure_api_key": "" # 识图apikey
     "recognize_pictures_keyword":  # 关键词触发识图，留空默认"kimi识图"，不为空则关键词+空格会触发识图
