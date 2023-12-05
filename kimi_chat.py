@@ -169,7 +169,7 @@ class KimiChat(Plugin):
         :param content: 用户提供的内容。
         :return: 处理后的回复内容。
         """
-        if not self.card_analysis:
+        if self.card_analysis:
             logger.info(f"[KimiChat] 开始处理分享链接！")
             new_content = f"总结网站内容：{content}"
             chat_id = self._get_or_create_chat_id(user_id, True)
@@ -231,7 +231,7 @@ class KimiChat(Plugin):
         """
         logger.info(f"[KimiChat] 开始处理文件！")
         if not self.file_upload or not check_file_format(content):
-            logger.info(f"[KimiChat] 文件格式不支持，PASS！")
+            logger.info(f"[KimiChat] 未开启文件识别或文件格式不支持，PASS！")
             return None
         msg.prepare()
         uploader = FileUploader()
